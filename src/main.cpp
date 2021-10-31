@@ -1,9 +1,13 @@
 #include "Arduino.h"
 
+#include "settings.hpp"
+
 #define SENDER
 #ifdef SENDER
 
 HardwareSerial Serial2(USART2);
+
+char input[INPUT_NUM];
 
 void setup() {
     Serial1.setRx(PB7);
@@ -16,12 +20,12 @@ void setup() {
 }
 
 void loop() {
-    int value1  = analogRead(PA0);
-    int value2  = analogRead(PA1);
-    int mapped1 = map(value1, 0, 1024, 0, 255);
-    int mapped2 = map(value2, 0, 1024, 0, 255);
-    Serial2.write(mapped1);
-    Serial2.write(mapped2);
+    uint16_t tmp[MAX_JOYSTICK_INPUTS];
+    for (size_t i = 0; i < INPUT_NUM; i += 1) {
+        uint16_t val = analogRead(input_pin[i]);
+        input[i]     = map(val, 0, 1024, 0, 255);
+    }
+    for (size_t i = 0; i < MSG_SIZE; i += 1) { Serial2.write(input[i]); }
     Serial2.write('\n');
     delay(50);
 }
@@ -29,10 +33,13 @@ void loop() {
 #else
 
 #include "Servo.h"
-Servo s1;
-Servo s2;
+
+Servo servo[MAX_SERVO_CHANNELS] = {};
 
 HardwareSerial Serial2(USART2);
+
+char   message[MSG_SIZE];
+size_t packet_index = 0;
 
 void setup() {
     Serial1.setRx(PB7);
@@ -43,16 +50,15 @@ void setup() {
     Serial2.setTx(PA2);
     Serial2.begin(9600);
 
-    s1.attach(PB10);
-    s2.attach(PB13);
+    servo[0].attach(PB10);
+    servo[1].attach(PB13);
+    servo[2].attach(PB14);
+    servo[3].attach(PB15);
 
+    // Blue LED.
     pinMode(PC13, OUTPUT);
     digitalWrite(PC13, HIGH);
 }
-
-#define MSG_SIZE 2
-char   message[MSG_SIZE];
-size_t packet_index = 0;
 
 void loop() {
     if (Serial2.available() > 0) {
@@ -66,11 +72,10 @@ void loop() {
     }
 
     if (packet_index == MSG_SIZE) {
-        char angle1 = map(message[0], 0, 255, 0, 180);
-        char angle2 = map(message[1], 0, 255, 0, 180);
-        s1.write(angle1);
-        s2.write(angle2);
-        Serial1.println(angle1, DEC);
+        for (size_t i = 0; i < MSG_SIZE; i += 1) {
+            char angle = map(message[i], 0, 255, 0, 180);
+            servo[i].write(angle);
+        }
         packet_index = 0;
     }
 }
